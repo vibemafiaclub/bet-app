@@ -23,6 +23,29 @@ def get_connection(db_path: Path | None = None):
         conn.close()
 
 
+def _migrate_iteration2(conn) -> None:
+    cols_t = {r[1] for r in conn.execute("PRAGMA table_info(trainers)").fetchall()}
+    if "username" not in cols_t:
+        conn.execute("ALTER TABLE trainers ADD COLUMN username TEXT")
+    if "password_hash" not in cols_t:
+        conn.execute("ALTER TABLE trainers ADD COLUMN password_hash TEXT")
+    if "is_owner" not in cols_t:
+        conn.execute("ALTER TABLE trainers ADD COLUMN is_owner INTEGER NOT NULL DEFAULT 0")
+
+    idx_names = {r[1] for r in conn.execute("PRAGMA index_list(trainers)").fetchall()}
+    if "idx_trainers_username" not in idx_names:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_trainers_username"
+            " ON trainers(username) WHERE username IS NOT NULL"
+        )
+
+    cols_s = {r[1] for r in conn.execute("PRAGMA table_info(pt_sessions)").fetchall()}
+    if "input_trainer_id" not in cols_s:
+        conn.execute(
+            "ALTER TABLE pt_sessions ADD COLUMN input_trainer_id INTEGER REFERENCES trainers(id)"
+        )
+
+
 def init_db(db_path: Path | None = None) -> None:
     """CREATE TABLE IF NOT EXISTS for 4 tables. Idempotent."""
     path = db_path if db_path is not None else DATABASE_PATH
@@ -58,3 +81,4 @@ CREATE TABLE IF NOT EXISTS session_sets (
     set_index INTEGER NOT NULL
 );
 """)
+        _migrate_iteration2(conn)

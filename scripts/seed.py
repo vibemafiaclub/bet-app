@@ -1,3 +1,4 @@
+import os
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -5,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.db import init_db, get_connection
+from app.auth import hash_password
 
 TODAY = date(2026, 4, 24)
 
@@ -264,21 +266,57 @@ MEMBER_C_SESSIONS = [
 
 
 def main():
+    admin_username = os.environ.get("ADMIN_USERNAME")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+
+    if not admin_username:
+        print("[seed.py] WARN: ADMIN_USERNAME not set, using fallback 'admin' for trainer.username.")
+    if not admin_password:
+        print(
+            "[seed.py] WARN: ADMIN_PASSWORD not set — password_hash left NULL."
+            " ensure_owner_seed will fill it on app boot based on env."
+        )
+
     init_db()
+
+    effective_username = admin_username or "admin"
+    display_name = effective_username
 
     now_str = TODAY.isoformat() + "T00:00:00"
     dates = _session_dates()
 
     with get_connection() as conn:
-        row = conn.execute("SELECT id FROM trainers WHERE name=?", ("김관장",)).fetchone()
-        if row:
-            trainer_id = row["id"]
+        owner_row = conn.execute(
+            "SELECT id, username, password_hash FROM trainers WHERE is_owner=1 ORDER BY id LIMIT 1"
+        ).fetchone()
+
+        if owner_row:
+            trainer_id = owner_row["id"]
+            if admin_username and not owner_row["username"]:
+                pw_hash = hash_password(admin_password) if (admin_password and owner_row["password_hash"] is None) else owner_row["password_hash"]
+                conn.execute(
+                    "UPDATE trainers SET username=?, password_hash=? WHERE id=?",
+                    (admin_username, pw_hash, trainer_id),
+                )
         else:
-            cur = conn.execute(
-                "INSERT INTO trainers (name, created_at) VALUES (?, ?)",
-                ("김관장", now_str),
-            )
-            trainer_id = cur.lastrowid
+            legacy_row = conn.execute(
+                "SELECT id, password_hash FROM trainers WHERE name=?", ("김관장",)
+            ).fetchone()
+            if legacy_row:
+                trainer_id = legacy_row["id"]
+                pw_hash = hash_password(admin_password) if (admin_password and legacy_row["password_hash"] is None) else legacy_row["password_hash"]
+                conn.execute(
+                    "UPDATE trainers SET username=?, is_owner=1, password_hash=? WHERE id=?",
+                    (effective_username, pw_hash, trainer_id),
+                )
+            else:
+                pw_hash = hash_password(admin_password) if admin_password else None
+                cur = conn.execute(
+                    "INSERT INTO trainers (name, username, password_hash, is_owner, created_at)"
+                    " VALUES (?, ?, ?, 1, ?)",
+                    (display_name, effective_username, pw_hash, now_str),
+                )
+                trainer_id = cur.lastrowid
 
         member_ids = []
         for name in ("회원A", "회원B", "회원C"):
