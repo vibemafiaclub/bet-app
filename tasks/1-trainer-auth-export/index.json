@@ -1,0 +1,13 @@
+{
+  "project": "bet",
+  "task": "trainer-auth-export",
+  "prompt": "iteration 2 requirement: iterations/2-20260424_034244/requirement.md — 소속 트레이너별 로그인 계정 + 세션 기록의 '입력자 트레이너' 귀속 + 관장 전용 트레이너별 CSV 내보내기. DDL: trainers.username/password_hash/is_owner, pt_sessions.input_trainer_id(NULL 허용). 해싱은 hashlib.scrypt, bcrypt 금지. 관장 부트 시드 upsert (없으면 INSERT, 있으면 is_owner만 보장, password_hash 불변; username mismatch 시 warn+skip). 계정 CRUD는 scripts/seed_trainer.py만. 백필은 scripts/backfill_input_trainer.py (멱등). CSV export는 /admin/export/sessions.csv (is_owner only, optional ?trainer_id, stdout 감사 로그, 60초 in-memory rate limit per owner, UTF-8 BOM 포함). 무인 세션 자동 실행.",
+  "totalPhases": 4,
+  "created_at": "2026-04-24T06:04:51+0900",
+  "phases": [
+    { "phase": 0, "name": "docs", "status": "pending" },
+    { "phase": 1, "name": "db-seeds", "status": "pending" },
+    { "phase": 2, "name": "auth-routes-export", "status": "pending" },
+    { "phase": 3, "name": "tests", "status": "pending" }
+  ]
+}
