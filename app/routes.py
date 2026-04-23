@@ -1,12 +1,22 @@
+import csv
+import io
+import time
 from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.aggregates import max_weight_per_session, total_volume_per_session
-from app.auth import is_authenticated, login_required_redirect, verify_credentials
+from app.auth import (
+    current_user,
+    is_authenticated,
+    is_owner,
+    login_required_redirect,
+    owner_required_redirect,
+    verify_credentials,
+)
 from app.db import get_connection
 from app.exercises import EXERCISES
 
@@ -26,8 +36,9 @@ def register_routes(app: FastAPI) -> None:
         form = await request.form()
         username = str(form.get("username", ""))
         password = str(form.get("password", ""))
-        if verify_credentials(username, password):
-            request.session["admin"] = True
+        user = verify_credentials(username, password)
+        if user is not None:
+            request.session["user"] = user
             return RedirectResponse(url="/", status_code=303)
         return templates.TemplateResponse(
             request,
@@ -134,8 +145,8 @@ def register_routes(app: FastAPI) -> None:
         now = datetime.utcnow().isoformat()
         with get_connection() as conn:
             cur = conn.execute(
-                "INSERT INTO pt_sessions (member_id, session_date, created_at) VALUES (?, ?, ?)",
-                (mid, session_date, now),
+                "INSERT INTO pt_sessions (member_id, session_date, created_at, input_trainer_id) VALUES (?, ?, ?, ?)",
+                (mid, session_date, now, current_user(request)["trainer_id"]),
             )
             session_id = cur.lastrowid
             for i, (ex, wkg, r) in enumerate(valid_rows):
@@ -202,4 +213,77 @@ def register_routes(app: FastAPI) -> None:
             request,
             "dashboard.html",
             {"tid": tid, "mid": mid, "member_name": member["name"]},
+        )
+
+    @app.get("/admin/export/sessions.csv")
+    async def get_export_sessions(request: Request, trainer_id: int | None = None):
+        if not is_authenticated(request):
+            return login_required_redirect()
+        if not is_owner(request):
+            return owner_required_redirect()
+
+        owner_id = current_user(request)["trainer_id"]
+        export_last_ts = request.app.state.export_last_ts
+
+        now_ts = time.monotonic()
+        if owner_id in export_last_ts and now_ts - export_last_ts[owner_id] < 60:
+            return Response(
+                "Too Many Requests: retry in 60s",
+                status_code=429,
+                media_type="text/plain; charset=utf-8",
+            )
+
+        with get_connection() as conn:
+            if trainer_id is None:
+                rows = conn.execute(
+                    """SELECT ps.session_date, m.name AS member_name,
+                              ss.exercise, ss.weight_kg, ss.reps, ss.set_index,
+                              COALESCE(t.name, '') AS input_trainer_name
+                       FROM session_sets ss
+                       JOIN pt_sessions ps ON ss.session_id = ps.id
+                       JOIN members m ON ps.member_id = m.id
+                       LEFT JOIN trainers t ON ps.input_trainer_id = t.id
+                       ORDER BY ps.session_date, ps.id, ss.set_index"""
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT ps.session_date, m.name AS member_name,
+                              ss.exercise, ss.weight_kg, ss.reps, ss.set_index,
+                              COALESCE(t.name, '') AS input_trainer_name
+                       FROM session_sets ss
+                       JOIN pt_sessions ps ON ss.session_id = ps.id
+                       JOIN members m ON ps.member_id = m.id
+                       LEFT JOIN trainers t ON ps.input_trainer_id = t.id
+                       WHERE ps.input_trainer_id = ?
+                       ORDER BY ps.session_date, ps.id, ss.set_index""",
+                    (trainer_id,),
+                ).fetchall()
+
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["session_date", "member_name", "exercise", "weight_kg", "reps", "set_index", "input_trainer_name"])
+        for row in rows:
+            writer.writerow([
+                row["session_date"], row["member_name"], row["exercise"],
+                row["weight_kg"], row["reps"], row["set_index"], row["input_trainer_name"],
+            ])
+
+        csv_content = "﻿" + buf.getvalue()
+        today_str = date.today().strftime("%Y%m%d")
+        if trainer_id is not None:
+            filename = f"sessions_{today_str}_trainer_{trainer_id}.csv"
+        else:
+            filename = f"sessions_{today_str}.csv"
+
+        print(
+            f"[export] owner_id={owner_id} target_trainer_id={trainer_id if trainer_id is not None else 'all'} rows={len(rows)}",
+            flush=True,
+        )
+
+        export_last_ts[owner_id] = time.monotonic()
+
+        return Response(
+            content=csv_content.encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )

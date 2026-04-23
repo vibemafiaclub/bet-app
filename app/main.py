@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth import ensure_owner_seed
 from app.db import init_db
 from app.routes import register_routes
 
@@ -18,6 +19,7 @@ def _validate_env() -> None:
 def create_app() -> FastAPI:
     _validate_env()
     init_db()
+    ensure_owner_seed()
     app = FastAPI()
     secure_cookie = os.environ.get("SESSION_COOKIE_SECURE", "0") == "1"
     app.add_middleware(
@@ -27,6 +29,7 @@ def create_app() -> FastAPI:
         https_only=secure_cookie,
         same_site="lax",
     )
+    app.state.export_last_ts = {}
     register_routes(app)
     return app
 

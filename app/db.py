@@ -1,26 +1,45 @@
 import os
 import sqlite3
-from contextlib import contextmanager
 from pathlib import Path
 
 DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", "./data/bet.db"))
 
-@contextmanager
-def get_connection(db_path: Path | None = None):
+
+class _ConnectionContext:
+    """Class-based context manager for sqlite3 connections.
+
+    Unlike @contextmanager, the generator finalizer does not close the
+    connection when the context manager object is GC'd without __exit__
+    being called. This ensures the connection stays open when callers use
+    .__enter__() directly (e.g., in tests).
+    """
+
+    def __init__(self, path: Path):
+        self._path = path
+        self._conn: sqlite3.Connection | None = None
+
+    def __enter__(self) -> sqlite3.Connection:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._conn = sqlite3.connect(self._path)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA foreign_keys=ON")
+        return self._conn
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._conn is not None:
+            if exc_type is not None:
+                self._conn.rollback()
+            else:
+                self._conn.commit()
+            self._conn.close()
+            self._conn = None
+        return False
+
+
+def get_connection(db_path: Path | None = None) -> _ConnectionContext:
     """sqlite3 connection context manager. row_factory=Row, foreign_keys=ON."""
     path = db_path if db_path is not None else DATABASE_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    return _ConnectionContext(path)
 
 
 def _migrate_iteration2(conn) -> None:
