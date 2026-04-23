@@ -5,11 +5,37 @@
   "totalPhases": 6,
   "created_at": "2026-04-24T02:30:00+0900",
   "phases": [
-    { "phase": 0, "name": "docs", "status": "pending" },
-    { "phase": 1, "name": "db-seed", "status": "pending" },
-    { "phase": 2, "name": "auth-log", "status": "pending" },
-    { "phase": 3, "name": "dashboard", "status": "pending" },
-    { "phase": 4, "name": "e2e-screenshot", "status": "pending" },
-    { "phase": 5, "name": "deploy-artifacts", "status": "pending" }
+    {
+      "phase": 0,
+      "name": "docs",
+      "status": "completed",
+      "started_at": "2026-04-24T02:41:04+0900",
+      "completed_at": "2026-04-24T03:00:00+0900"
+    },
+    {
+      "phase": 1,
+      "name": "db-seed",
+      "status": "pending"
+    },
+    {
+      "phase": 2,
+      "name": "auth-log",
+      "status": "pending"
+    },
+    {
+      "phase": 3,
+      "name": "dashboard",
+      "status": "pending"
+    },
+    {
+      "phase": 4,
+      "name": "e2e-screenshot",
+      "status": "pending"
+    },
+    {
+      "phase": 5,
+      "name": "deploy-artifacts",
+      "status": "pending"
+    }
   ]
 }
