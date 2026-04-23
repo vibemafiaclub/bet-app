@@ -1,0 +1,67 @@
+{
+  "iter_id": "1-20260424_020912",
+  "status": "pass",
+  "task": {
+    "dir": "tasks/0-pt-mvp",
+    "name": "pt-mvp",
+    "overall_status": "completed"
+  },
+  "phases": [
+    {
+      "phase": 0,
+      "name": "docs",
+      "status": "completed",
+      "duration_sec": 93,
+      "notes": "docs/spec.md, docs/testing.md, docs/user-intervention.md 3종 신규. 17개 AC 통과"
+    },
+    {
+      "phase": 1,
+      "name": "db-seed",
+      "status": "completed",
+      "duration_sec": 190,
+      "notes": "SQLite 스키마 + 멱등 seed(트레이너1, 회원3, 각 12세션), 단위테스트 6개 green"
+    },
+    {
+      "phase": 2,
+      "name": "auth-log",
+      "status": "completed",
+      "duration_sec": 598,
+      "notes": "하드코딩 어드민 로그인 + 세션 쿠키 + HTMX 로그 폼. 12개 테스트 green. Starlette 1.0 TemplateResponse 시그니처 대응"
+    },
+    {
+      "phase": 3,
+      "name": "dashboard",
+      "status": "completed",
+      "duration_sec": 210,
+      "notes": "chart-data.json 엔드포인트 + Chart.js 4.4.9 canvas 2개(최대중량/세션볼륨). 10개 테스트 green"
+    },
+    {
+      "phase": 4,
+      "name": "e2e-screenshot",
+      "status": "completed",
+      "duration_sec": 334,
+      "notes": "Playwright live_server fixture + 로그인→대시보드 스크린샷. artifacts/dashboard.png(65KB) 생성. DoD 증거 확보"
+    },
+    {
+      "phase": 5,
+      "name": "deploy-artifacts",
+      "status": "completed",
+      "duration_sec": 82,
+      "notes": "Dockerfile + .dockerignore + fly.toml(nrt, bet_data 볼륨, 256MB). 28개 테스트 green 유지"
+    }
+  ],
+  "issues": [],
+  "conclusion": "6개 phase 전부 completed, 28개 테스트 green, DoD 증거(dashboard.png) 확보. PT 세션 기록 + 꺾은선 그래프 single-view MVP 성립.",
+  "carry_over": [
+    "Pre-MVP 공학 리스크 중 '자동 지표 수집 / AI 트레이너 / PDF 리포트 / Rappo 연동'은 이번 스프린트에서 명시적 제외 — 시뮬 페르소나 report.md 가치제안 개선 포인트 2번에서 재제기될 가능성 높음",
+    "트레이너 IP·입력 노동 보전 메커니즘(5개 세션 반복 우려)은 이번 MVP에 반영 없음 — 차후 iteration 후보",
+    "회원(downstream) AI 개입 수용성·상담 전환율 베이스라인은 측정 수단 미구현 — 파일럿 킥오프 전 필요"
+  ],
+  "progress": {
+    "previous_iter_id": null,
+    "previous_run_id": null,
+    "current_run_id": "pt-trainer-owner-01_20260424_021018",
+    "signal": "no_prior_run",
+    "summary": "첫 iteration이라 비교 대상 없음. 베이스라인 run(pt-trainer-owner-01_20260424_021018)에서 키맨 최종 confidence 82로 성사 판정. 다음 iteration에서 이 run 대비 pain 감소 여부를 판정하게 됨."
+  }
+}
