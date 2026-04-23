@@ -1,0 +1,15 @@
+{
+  "project": "bet",
+  "task": "pt-mvp",
+  "prompt": "iteration 1 requirement: iterations/1-20260424_020912/requirement.md — PT 세션 기록 입력 폼 + 회원별 중량/볼륨 진전 꺾은선 그래프 single-view MVP. FastAPI + SQLite + HTMX + Chart.js, 인증은 하드코딩 어드민 1개, 배포는 Fly.io. 무인 세션에서 자동 실행.",
+  "totalPhases": 6,
+  "created_at": "2026-04-24T02:30:00+0900",
+  "phases": [
+    { "phase": 0, "name": "docs", "status": "pending" },
+    { "phase": 1, "name": "db-seed", "status": "pending" },
+    { "phase": 2, "name": "auth-log", "status": "pending" },
+    { "phase": 3, "name": "dashboard", "status": "pending" },
+    { "phase": 4, "name": "e2e-screenshot", "status": "pending" },
+    { "phase": 5, "name": "deploy-artifacts", "status": "pending" }
+  ]
+}
