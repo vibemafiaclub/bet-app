@@ -1,0 +1,12 @@
+{
+  "project": "bet",
+  "task": "my-export",
+  "prompt": "iteration 3 requirement: iterations/3-20260424_075811/requirement.md — R0: GET /my/export/sessions.csv 라우트 구현. 로그인한 트레이너 본인의 input_trainer_id row만 CSV 다운로드. is_owner 체크 없음 (관장도 본인 자격으로 호출 가능). 응답 포맷은 관장 export와 1:1 동일 컬럼/UTF-8 BOM/text/csv. 파일명 my_sessions_YYYYMMDD.csv. Rate limit 60초 (별도 my_export_last_ts dict). stdout 감사 로그 [my-export] trainer_id=X rows=N. CTO 조건: (1) 공통 CSV 헬퍼 _write_sessions_csv 추출 — 컬럼명 단일 상수 참조, (2) rate limit dict 물리 분리, (3) 컬럼 동등성 bit-exact 회귀 테스트, (4) docs/spec.md 예약 티켓을 감사 로그 뷰어 후보로 교체. 무인 세션 자동 실행.",
+  "totalPhases": 3,
+  "created_at": "2026-04-24T08:00:00+0900",
+  "phases": [
+    { "phase": 0, "name": "docs", "status": "pending" },
+    { "phase": 1, "name": "helper-route", "status": "pending" },
+    { "phase": 2, "name": "tests", "status": "pending" }
+  ]
+}
