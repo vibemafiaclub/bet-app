@@ -36,7 +36,9 @@
     {
       "phase": 4,
       "name": "e2e-screenshot",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-24T02:59:15+0900",
+      "completed_at": "2026-04-24T03:15:00+0900"
     },
     {
       "phase": 5,
