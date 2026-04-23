@@ -304,7 +304,7 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         cwd=str(ROOT),
         capture_output=True,
         text=True,
-        timeout=600,  # 10 minutes per phase
+        timeout=1800,  # 30 minutes per phase
         env={**os.environ, **gh_env} if gh_env else None,
     )
 
