@@ -294,6 +294,7 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         "claude",
         "-p",
         "--dangerously-skip-permissions",
+        "--model", "sonnet",
         "--output-format", "json",
         full_prompt,
     ]
