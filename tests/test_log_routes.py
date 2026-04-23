@@ -114,3 +114,29 @@ def test_post_log_rejects_when_all_rows_empty(temp_db, authed_client):
         },
     )
     assert r.status_code == 400
+
+
+def test_post_log_stamps_input_trainer_id(temp_db, authed_client):
+    """POST /log 시 session["user"]["trainer_id"]가 input_trainer_id로 기록된다."""
+    tid, mid = _seed_trainer_member(temp_db)
+
+    with get_connection(temp_db) as c:
+        owner_row = c.execute("SELECT id FROM trainers WHERE is_owner=1 LIMIT 1").fetchone()
+    admin_tid = owner_row["id"]
+
+    authed_client.post(
+        f"/trainers/{tid}/members/{mid}/log",
+        data={
+            "session_date": "2026-04-24",
+            "exercise": ["스쿼트"],
+            "weight_kg": ["60"],
+            "reps": ["5"],
+        },
+    )
+
+    with get_connection(temp_db) as c:
+        row = c.execute(
+            "SELECT input_trainer_id FROM pt_sessions WHERE member_id=?", (mid,)
+        ).fetchone()
+
+    assert row["input_trainer_id"] == admin_tid
