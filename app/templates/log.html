@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ member_name }}</h2>
+<p><a href="/trainers/{{ tid }}/members/{{ mid }}/dashboard">이 회원 대시보드</a></p>
+
+<form hx-post="/trainers/{{ tid }}/members/{{ mid }}/log" hx-target="#entry-feedback">
+  <div>
+    <label>날짜: <input type="date" name="session_date" value="{{ today }}" required></label>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>운동</th><th>중량(kg)</th><th>횟수</th></tr>
+    </thead>
+    <tbody id="sets">
+      <tr>
+        <td>
+          <select name="exercise">
+            {% for ex in exercises %}
+            <option value="{{ ex }}">{{ ex }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td><input type="number" name="weight_kg" step="0.5" min="0.5"></td>
+        <td><input type="number" name="reps" min="1"></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <template id="set-row-template">
+    <tr>
+      <td>
+        <select name="exercise">
+          {% for ex in exercises %}
+          <option value="{{ ex }}">{{ ex }}</option>
+          {% endfor %}
+        </select>
+      </td>
+      <td><input type="number" name="weight_kg" step="0.5" min="0.5"></td>
+      <td><input type="number" name="reps" min="1"></td>
+    </tr>
+  </template>
+
+  <button type="button" onclick="addRow()">세트 추가</button>
+  <button type="submit">저장</button>
+</form>
+
+<div id="entry-feedback"></div>
+
+<script>
+function addRow() {
+  const template = document.getElementById('set-row-template');
+  const clone = template.content.cloneNode(true);
+  document.getElementById('sets').appendChild(clone);
+}
+</script>
+{% endblock %}

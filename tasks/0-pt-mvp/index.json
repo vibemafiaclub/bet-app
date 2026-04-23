@@ -22,7 +22,9 @@
     {
       "phase": 2,
       "name": "auth-log",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-24T02:45:47+0900",
+      "completed_at": "2026-04-24T03:10:00+0900"
     },
     {
       "phase": 3,

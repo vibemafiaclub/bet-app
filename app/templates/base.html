@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BET</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+  <div style="text-align:right">
+    <form method="post" action="/logout" style="display:inline">
+      <button type="submit">로그아웃</button>
+    </form>
+  </div>
+  {% block content %}{% endblock %}
+</body>
+</html>
