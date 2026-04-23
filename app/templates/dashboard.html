@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ member_name }}</h2>
+<p><a href="/trainers/{{ tid }}/members/{{ mid }}/log">이 회원 로그 입력</a></p>
+
+<canvas id="max-weight-chart" width="800" height="400"></canvas>
+<canvas id="total-volume-chart" width="800" height="400"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script>
+fetch(window.location.pathname.replace('/dashboard', '/chart-data.json'))
+  .then(r => r.json())
+  .then(d => {
+    new Chart(document.getElementById('max-weight-chart'), {
+      type: 'line',
+      data: { labels: d.max_weight.labels, datasets: d.max_weight.datasets },
+      options: { responsive: false, plugins: { title: { display: true, text: '운동별 최대 중량 추이 (kg)' }}}
+    });
+    new Chart(document.getElementById('total-volume-chart'), {
+      type: 'line',
+      data: { labels: d.total_volume.labels, datasets: [{ label: '세션당 총 볼륨', data: d.total_volume.data }]},
+      options: { responsive: false, plugins: { title: { display: true, text: '세션당 총 볼륨 (kg × reps)' }}}
+    });
+  });
+</script>
+{% endblock %}

@@ -2,9 +2,10 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from app.aggregates import max_weight_per_session, total_volume_per_session
 from app.auth import is_authenticated, login_required_redirect, verify_credentials
 from app.db import get_connection
 from app.exercises import EXERCISES
@@ -145,4 +146,60 @@ def register_routes(app: FastAPI) -> None:
 
         return HTMLResponse(
             f'<div id="entry-feedback">저장됨 (<a href="/trainers/{tid}/members/{mid}/dashboard">대시보드 보기</a>)</div>'
+        )
+
+    @app.get("/trainers/{tid}/members/{mid}/chart-data.json")
+    async def get_chart_data(request: Request, tid: int, mid: int):
+        if not is_authenticated(request):
+            return login_required_redirect()
+        with get_connection() as conn:
+            member = conn.execute(
+                "SELECT id, name FROM members WHERE id=? AND trainer_id=?",
+                (mid, tid),
+            ).fetchone()
+            if not member:
+                return JSONResponse({"detail": "not found"}, status_code=404)
+            max_weight_rows = max_weight_per_session(conn, mid)
+            volume_rows = total_volume_per_session(conn, mid)
+
+        labels = sorted({r["session_date"] for r in max_weight_rows})
+
+        exercise_map: dict[str, dict[str, float]] = {}
+        for row in max_weight_rows:
+            ex = row["exercise"]
+            if ex not in exercise_map:
+                exercise_map[ex] = {}
+            exercise_map[ex][row["session_date"]] = row["max_weight"]
+
+        datasets = [
+            {"label": ex, "data": [exercise_map[ex].get(dt) for dt in labels]}
+            for ex in sorted(exercise_map)
+        ]
+
+        volume_by_date: dict[str, float] = {}
+        for row in volume_rows:
+            dt = row["session_date"]
+            volume_by_date[dt] = volume_by_date.get(dt, 0.0) + row["total_volume"]
+
+        return JSONResponse({
+            "member": {"id": member["id"], "name": member["name"]},
+            "max_weight": {"labels": labels, "datasets": datasets},
+            "total_volume": {"labels": labels, "data": [volume_by_date.get(dt, 0.0) for dt in labels]},
+        })
+
+    @app.get("/trainers/{tid}/members/{mid}/dashboard")
+    async def get_dashboard(request: Request, tid: int, mid: int):
+        if not is_authenticated(request):
+            return login_required_redirect()
+        with get_connection() as conn:
+            member = conn.execute(
+                "SELECT id, name FROM members WHERE id=? AND trainer_id=?",
+                (mid, tid),
+            ).fetchone()
+        if not member:
+            return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
+        return templates.TemplateResponse(
+            request,
+            "dashboard.html",
+            {"tid": tid, "mid": mid, "member_name": member["name"]},
         )
