@@ -48,3 +48,35 @@ APP_SESSION_SECRET=dev-secret-change-me ADMIN_USERNAME=admin ADMIN_PASSWORD=pass
 ```
 
 브라우저에서 `http://localhost:8000` 접속 후 위에서 설정한 `ADMIN_USERNAME` / `ADMIN_PASSWORD`로 로그인.
+
+## iteration 2 트레이너 계정 운영
+
+### 배포 후 관장 1회 재로그인 필요
+iteration 2 배포 직후, 기존에 로그인된 관장 세션 쿠키는 구조(`admin=True`)가 달라져 자동으로 로그아웃된다. 배포 완료 후 관장이 직접 로그인 폼에서 재로그인해야 한다.
+
+### 트레이너 계정 생성 / 비밀번호 리셋
+`fly ssh console` 후:
+```bash
+ uv run python -m scripts.seed_trainer --name "트레이너 이름" --username trainer_u --password "pw"
+```
+- 같은 `--username`으로 재실행하면 비밀번호 리셋 (upsert).
+- `--owner` 플래그를 주면 해당 계정을 is_owner=1로 승격 (다른 계정의 is_owner는 0으로 전환되며 stdout에 목록 출력).
+- **shell history 회피**: 명령 앞에 공백 prefix를 붙이거나 실행 후 `history -c` (HISTCONTROL=ignorespace 가정).
+
+### 관장 교체
+`fly ssh console` 후:
+```bash
+sqlite3 /data/bet.db "UPDATE trainers SET is_owner=0; UPDATE trainers SET is_owner=1 WHERE username='<새관장_username>';"
+```
+그 후 `fly secrets set ADMIN_USERNAME='<새관장_username>' ADMIN_PASSWORD='<새비번 또는 기존비번>'` 로 env도 갱신. env를 갱신하지 않으면 부팅 시 `[warn] ADMIN_USERNAME mismatch` 경고가 stdout에 뜨지만 앱은 계속 기동한다.
+
+### 백필 스크립트 실행 (iteration 2 배포 후 필수 1회)
+`fly ssh console` 후 **반드시** 1회 실행:
+```bash
+uv run python -m scripts.backfill_input_trainer
+```
+- iteration 1 시절 누적된 `pt_sessions.input_trainer_id IS NULL` row를 관장의 trainer_id로 UPDATE.
+- 멱등: 2회 실행해도 0건 UPDATE.
+- 관장 계정이 DB에 없으면 (env 미설정 또는 seed 미완료) exit 1 + stderr 안내. 이 경우 먼저 `seed_trainer --owner`로 관장 생성 후 재실행.
+- 이 백필이 다음 스프린트 "트레이너 본인의 CSV export 라우트"의 전제다. 백필 없이 배포되면 NULL rows가 계속 쌓여 후속 스프린트가 깨진다.
+- 배포 순서: **(1) Phase 1~2 코드 배포 → (2) 이 백필 1회 실행 → (3) 운영 재개**.
