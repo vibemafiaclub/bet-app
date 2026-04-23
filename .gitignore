@@ -4,3 +4,8 @@ __pycache__
 node_modules
 
 iterations/**/*.log
+
+data/
+*.db
+.venv/
+.pytest_cache/
