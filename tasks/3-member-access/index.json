@@ -27,5 +27,6 @@
       "completed_at": "2026-04-24T11:40:49+0900",
       "notes": "12 scenarios all green. e2e passed in local env (playwright chromium available)."
     }
-  ]
+  ],
+  "completed_at": "2026-04-24T11:40:49+0900"
 }
