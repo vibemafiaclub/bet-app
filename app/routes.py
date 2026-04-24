@@ -23,6 +23,57 @@ from app.exercises import EXERCISES
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
+_SESSIONS_CSV_COLUMNS = (
+    "session_date",
+    "member_name",
+    "exercise",
+    "weight_kg",
+    "reps",
+    "set_index",
+    "input_trainer_name",
+)
+
+
+def _write_sessions_csv(conn, trainer_id_filter, buffer) -> int:
+    """세션 row들을 CSV 포맷으로 buffer에 쓴다 (BOM 없음).
+
+    `trainer_id_filter`가 None이면 전체 세션, 정수면 해당 trainer_id의 input 세션만.
+    반환값은 header row를 제외한 data row 수 (감사 로그 `rows=N` 용).
+
+    관장 export(`/admin/export/sessions.csv`)와 본인 export(`/my/export/sessions.csv`)
+    양쪽이 이 함수를 공유하여 컬럼 drift를 코드 레벨에서 차단한다.
+    헤더 row와 data row 모두 `_SESSIONS_CSV_COLUMNS` 단일 상수를 참조한다.
+    """
+    writer = csv.writer(buffer)
+    writer.writerow(_SESSIONS_CSV_COLUMNS)
+
+    base_sql = (
+        "SELECT ps.session_date, m.name AS member_name, "
+        "ss.exercise, ss.weight_kg, ss.reps, ss.set_index, "
+        "COALESCE(t.name, '') AS input_trainer_name "
+        "FROM session_sets ss "
+        "JOIN pt_sessions ps ON ss.session_id = ps.id "
+        "JOIN members m ON ps.member_id = m.id "
+        "LEFT JOIN trainers t ON ps.input_trainer_id = t.id"
+    )
+    if trainer_id_filter is None:
+        rows = conn.execute(
+            base_sql + " ORDER BY ps.session_date, ps.id, ss.set_index"
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            base_sql
+            + " WHERE ps.input_trainer_id = ?"
+            + " ORDER BY ps.session_date, ps.id, ss.set_index",
+            (trainer_id_filter,),
+        ).fetchall()
+
+    for row in rows:
+        writer.writerow(tuple(row[c] for c in _SESSIONS_CSV_COLUMNS))
+
+    return len(rows)
+
+
 def register_routes(app: FastAPI) -> None:
 
     @app.get("/login")
@@ -233,40 +284,9 @@ def register_routes(app: FastAPI) -> None:
                 media_type="text/plain; charset=utf-8",
             )
 
-        with get_connection() as conn:
-            if trainer_id is None:
-                rows = conn.execute(
-                    """SELECT ps.session_date, m.name AS member_name,
-                              ss.exercise, ss.weight_kg, ss.reps, ss.set_index,
-                              COALESCE(t.name, '') AS input_trainer_name
-                       FROM session_sets ss
-                       JOIN pt_sessions ps ON ss.session_id = ps.id
-                       JOIN members m ON ps.member_id = m.id
-                       LEFT JOIN trainers t ON ps.input_trainer_id = t.id
-                       ORDER BY ps.session_date, ps.id, ss.set_index"""
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT ps.session_date, m.name AS member_name,
-                              ss.exercise, ss.weight_kg, ss.reps, ss.set_index,
-                              COALESCE(t.name, '') AS input_trainer_name
-                       FROM session_sets ss
-                       JOIN pt_sessions ps ON ss.session_id = ps.id
-                       JOIN members m ON ps.member_id = m.id
-                       LEFT JOIN trainers t ON ps.input_trainer_id = t.id
-                       WHERE ps.input_trainer_id = ?
-                       ORDER BY ps.session_date, ps.id, ss.set_index""",
-                    (trainer_id,),
-                ).fetchall()
-
         buf = io.StringIO()
-        writer = csv.writer(buf)
-        writer.writerow(["session_date", "member_name", "exercise", "weight_kg", "reps", "set_index", "input_trainer_name"])
-        for row in rows:
-            writer.writerow([
-                row["session_date"], row["member_name"], row["exercise"],
-                row["weight_kg"], row["reps"], row["set_index"], row["input_trainer_name"],
-            ])
+        with get_connection() as conn:
+            rows_count = _write_sessions_csv(conn, trainer_id, buf)
 
         csv_content = "﻿" + buf.getvalue()
         today_str = date.today().strftime("%Y%m%d")
@@ -276,11 +296,48 @@ def register_routes(app: FastAPI) -> None:
             filename = f"sessions_{today_str}.csv"
 
         print(
-            f"[export] owner_id={owner_id} target_trainer_id={trainer_id if trainer_id is not None else 'all'} rows={len(rows)}",
+            f"[export] owner_id={owner_id} target_trainer_id={trainer_id if trainer_id is not None else 'all'} rows={rows_count}",
             flush=True,
         )
 
         export_last_ts[owner_id] = time.monotonic()
+
+        return Response(
+            content=csv_content.encode("utf-8"),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/my/export/sessions.csv")
+    async def get_my_export_sessions(request: Request):
+        if not is_authenticated(request):
+            return login_required_redirect()
+
+        trainer_id = current_user(request)["trainer_id"]
+        my_export_last_ts = request.app.state.my_export_last_ts
+
+        now_ts = time.monotonic()
+        if trainer_id in my_export_last_ts and now_ts - my_export_last_ts[trainer_id] < 60:
+            return Response(
+                "Too Many Requests: retry in 60s",
+                status_code=429,
+                media_type="text/plain; charset=utf-8",
+            )
+
+        buf = io.StringIO()
+        with get_connection() as conn:
+            rows_count = _write_sessions_csv(conn, trainer_id, buf)
+
+        csv_content = "﻿" + buf.getvalue()
+        today_str = date.today().strftime("%Y%m%d")
+        filename = f"my_sessions_{today_str}.csv"
+
+        print(
+            f"[my-export] trainer_id={trainer_id} rows={rows_count}",
+            flush=True,
+        )
+
+        my_export_last_ts[trainer_id] = time.monotonic()
 
         return Response(
             content=csv_content.encode("utf-8"),

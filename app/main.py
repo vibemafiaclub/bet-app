@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
         same_site="lax",
     )
     app.state.export_last_ts = {}
+    app.state.my_export_last_ts = {}
     register_routes(app)
     return app
 
