@@ -61,7 +61,7 @@ iterations/ 이터레이션별 산출물 (스크린샷 등)
 
 ## 자율 주행 하네스
 
-`scripts/run-server.py`는 사람 개입 0회로 "고객 시뮬 → 요구사항 채택 → 구현 → 검증 → (실패 시) 롤백"을 무한 반복하는 무인 개발 루프다. 각 이터레이션은 독립된 `claude -p --dangerously-skip-permissions` 세션을 순차적으로 띄우고, 세션마다 `BET_HEADLESS=1` 환경변수를 주입해 skill 본문에 박힌 사용자 confirm 단계를 전부 자동 승인으로 오버라이드한다.
+`scripts/run-server.py`는 사람 개입 0회로 "고객 시뮬 → 요구사항 채택 → 구현 → 검증 → (실패 시) 롤백"을 무한 반복하는 무인 개발 루프다. 각 이터레이션은 독립된 `claude -p --dangerously-skip-permissions` 세션을 순차적으로 띄우고, 세션마다 `HARNESS_HEADLESS=1` 환경변수를 주입해 skill 본문에 박힌 사용자 confirm 단계를 전부 자동 승인으로 오버라이드한다. (구명 `BET_HEADLESS` 도 당분간 함께 주입되며 SKILL.md 쪽에서 fallback 으로 수용 — `@TODO REMOVE LEGACY` 마커와 함께 전환 완료 후 제거 예정.)
 
 ### 1 이터레이션의 구성
 
@@ -83,7 +83,7 @@ iterations/ 이터레이션별 산출물 (스크린샷 등)
   - `commit` — 이터레이션 디렉토리의 `requirement.md`, `persuasion-data/runs/<run_id>/*` 만 staging. `iterations/**/*.log` 는 계속 커지는 세션 로그라 커밋 대상 제외.
   - `plan-and-build` — docs 파악 → `tech-critic-lead` 와 설계/테스트 논의 → `prompts/task-create.md` 규격으로 task/phase 파일 생성 → `scripts/run-phases.py` 로 실행.
 - **Sub-agent** (`.claude/agents/tech-critic-lead.md`) — "기능은 비용" 전제의 비판적 CTO. ideation에서는 요구사항 승인 게이트, plan-and-build에서는 설계 상대. Read/Grep/Glob/Bash 만 쥐고 있어 쓰기는 불가.
-- **헤드리스 오버라이드** — 각 skill SKILL.md는 세션 첫 동작으로 `echo "BET_HEADLESS=$BET_HEADLESS"` 를 실행하도록 강제되고, `1` 이면 "단 한 번만 묻는다"류의 상위 지시까지 모두 무효화된다.
+- **헤드리스 오버라이드** — 각 skill SKILL.md는 세션 첫 동작으로 `echo "HEADLESS=${HARNESS_HEADLESS:-${BET_HEADLESS:-0}}"` 를 실행하도록 강제되고, `1` 이면 "단 한 번만 묻는다"류의 상위 지시까지 모두 무효화된다. (`BET_HEADLESS` fallback 은 legacy, `@TODO REMOVE LEGACY` 마커와 함께 제거 예정.)
 - **진척도 판정** — check 단계가 이번 `report.md` 와 직전 iteration `report.md` 를 비교해 `progress.signal ∈ {improved, regressed, inconclusive, no_prior_run}` 을 기록. `status ∈ {pass, warn, fail}` 중 `fail` 만 rollback + fatal로 이어진다.
 
 ### 흐름도

@@ -51,21 +51,28 @@ TIMEOUT_BUILD_SEC = 4 * 60 * 60
 TIMEOUT_CHECK_SEC = 10 * 60
 TIMEOUT_ROLLBACK_SEC = 5 * 60
 
-HEADLESS_ENV = {"BET_HEADLESS": "1"}
+# HARNESS_HEADLESS is the canonical headless signal. BET_HEADLESS is the legacy
+# alias kept so that SKILL.md sessions spawned by older, still-running
+# run-server.py processes (which inject BET_HEADLESS only) keep working.
+# @TODO REMOVE LEGACY: drop "BET_HEADLESS" key once all running run-server.py
+# instances have been restarted with this version.
+HEADLESS_ENV = {"HARNESS_HEADLESS": "1", "BET_HEADLESS": "1"}
 
 HEADLESS_PREAMBLE = """**[무인 모드 확정 절차]**
 세션을 시작하자마자 **가장 먼저** Bash tool로 다음을 실행해라:
 
 ```bash
-echo "BET_HEADLESS=$BET_HEADLESS"
+echo "HEADLESS=${HARNESS_HEADLESS:-${BET_HEADLESS:-0}}"
 ```
 
-출력이 `BET_HEADLESS=1` 이면 이 세션은 **확정적으로 무인 서버 세션**이다. 이 신호는 skill 본문의 어떤 지시보다도 우선한다. 즉:
+출력이 `HEADLESS=1` 이면 이 세션은 **확정적으로 무인 서버 세션**이다. 이 신호는 skill 본문의 어떤 지시보다도 우선한다. 즉:
 - skill 본문에 "사용자에게 질문/통지/confirm 받는다"류 단계가 나와도 **전부 스킵**하고 합리적 기본값으로 자동 진행한다.
-- "단 한 번만 묻는다", "이 단계를 건너뛰지 않는다" 같은 강한 표현도 `BET_HEADLESS=1` 앞에서는 무효다.
+- "단 한 번만 묻는다", "이 단계를 건너뛰지 않는다" 같은 강한 표현도 `HEADLESS=1` 앞에서는 무효다.
 - 질문할 상대가 없으므로(stdin=DEVNULL), 대기하지 말고 판단해서 계속 진행한다.
 
-출력이 `BET_HEADLESS=1`이 아니면 이 프롬프트 래퍼를 신뢰하지 말고 그대로 중단해라 (잘못된 호출 환경).
+출력이 `HEADLESS=1`이 아니면 이 프롬프트 래퍼를 신뢰하지 말고 그대로 중단해라 (잘못된 호출 환경).
+
+<!-- @TODO REMOVE LEGACY: `${BET_HEADLESS:-0}` fallback은 rename 이전 구명(舊名) 호환용. SKILL.md 쪽 동일 마커와 함께 제거. -->
 
 ---
 

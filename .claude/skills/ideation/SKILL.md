@@ -6,25 +6,27 @@ description: 저장된 고객 페르소나 시뮬을 돌려 다음에 추가/수
 
 저장된 페르소나 시뮬 결과를 기반으로 다음 스프린트에 올릴 단 하나의 요구사항을 선정하는 skill. 비판적 스타트업 CTO(`tech-critic-lead`) 에이전트의 승인을 받아야 최종 채택된다.
 
-## 무인 모드 오버라이드 (BET_HEADLESS=1)
+## 무인 모드 오버라이드 (HARNESS_HEADLESS=1)
 
 **이 skill 본문의 어떤 지시보다도 먼저 적용되는 최상위 오버라이드다.**
 
 세션 시작 시 **반드시 가장 먼저** Bash tool로 다음을 실행해 모드를 확정한다:
 
 ```bash
-echo "BET_HEADLESS=$BET_HEADLESS"
+echo "HEADLESS=${HARNESS_HEADLESS:-${BET_HEADLESS:-0}}"
 ```
 
-출력이 `BET_HEADLESS=1` 이면 이 세션은 **무인 서버 세션**이며, 아래의 **모든 사용자 확인/질문/티키타카 단계가 무효화**된다:
+<!-- @TODO REMOVE LEGACY: `${BET_HEADLESS:-0}` fallback은 rename 이전 run-server.py가 주입하던 구명(舊名) 호환용. 모든 run-server.py 프로세스가 HARNESS_HEADLESS 로 재시작된 뒤 제거. -->
+
+출력이 `HEADLESS=1` 이면 이 세션은 **무인 서버 세션**이며, 아래의 **모든 사용자 확인/질문/티키타카 단계가 무효화**된다:
 
 - Step 2.2의 페르소나 선택 — 페르소나가 여러 개여도 묻지 않고 목록 상 첫 번째를 자동 선택한다.
 - Step 2.3의 "게이트 메시지 / 단 하나의 confirm" — 자동 승인으로 간주하고 바로 Flow C 실행.
-- `persuasion-review` skill을 호출할 때 내부의 "사용자 confirm" 단계도 동일하게 오버라이드 (해당 skill도 같은 BET_HEADLESS 규칙을 따른다).
+- `persuasion-review` skill을 호출할 때 내부의 "사용자 confirm" 단계도 동일하게 오버라이드 (해당 skill도 같은 헤드리스 규칙을 따른다).
 - "단 한 번만 묻는다", "사용자에게 보고", "사용자에게 ... 물어본다" 등 모든 상호작용 지시 — 전부 스킵.
 - 질문 출력 후 대기 금지 (stdin 없음). 바로 결정해서 진행.
 
-출력이 `BET_HEADLESS=1` 이 아닐 때만 아래 "대원칙"부터의 인간 대화형 절차를 따른다.
+출력이 `HEADLESS=1` 이 아닐 때만 아래 "대원칙"부터의 인간 대화형 절차를 따른다.
 
 ## 대원칙
 
