@@ -7,7 +7,7 @@
 - 테스트 DB는 각 테스트마다 별도 temp file → teardown에서 제거.
 - `pytest.monkeypatch`를 통한 env / 모듈 attribute / 모듈 전역 dict 조작은 mock 금지 원칙에 저촉되지 않음 (conftest가 이미 이 방식으로 DB 경로와 env를 주입한다). 단 DB 자체를 mock하거나 `time.monotonic` 자체를 패치하는 것은 금지.
 
-## 테스트 구성 (6 파일)
+## 테스트 구성 (9 파일)
 1. `tests/test_aggregates.py` — 집계 함수 단위 테스트 (`max_weight_per_session`, `total_volume_per_session`). **CHECK 제약 스모크 테스트 포함**: 음수 weight / 미등록 exercise INSERT가 `sqlite3.IntegrityError`를 내는지 런타임 증명.
 2. `tests/test_auth.py` — 로그인 / 세션 / 로그아웃 라우트. **iteration 2 확장**: 관장 부트 시드(신규 INSERT / 기존 password_hash 불변 / username mismatch 시 warn+skip), non-owner 트레이너 로그인, `session["user"]` 스키마 검증.
 3. `tests/test_log_routes.py` — 로그 폼 GET / POST, 빈 세트 스킵, 검증 실패 처리. **iteration 2 확장**: POST /log가 세션의 `trainer_id`를 `pt_sessions.input_trainer_id`에 기록.
@@ -16,6 +16,7 @@
 6. `tests/test_export.py` (iteration 2 신규) — `/admin/export/sessions.csv` 권한 분기(owner only), `trainer_id` 쿼리 필터, 60초 rate limit, stdout 감사 로그 포맷, NULL `input_trainer_id` row의 빈 이름 렌더, UTF-8 BOM 본문 접두.
 7. `tests/test_my_export.py` (iteration 3 신규) — `/my/export/sessions.csv` 권한 분기(is_authenticated만 필요, is_owner bypass 없음), 본인 `input_trainer_id` 필터, 관장 로그인 시에도 본인 row만 반환, 60초 rate limit (관장 export와 dict 물리 분리), stdout 감사 로그 포맷 `[my-export] trainer_id=X rows=N`, UTF-8 BOM 본문 접두, `filename="my_sessions_YYYYMMDD.csv"` 헤더, **컬럼 동등성 회귀 테스트**(관장 `/admin/export?trainer_id=X` body와 X 로그인 `/my/export` body가 bit-exact 일치).
 8. `tests/test_member_access.py` (iteration 5 신규) — R5 partial isolation 가드. 12 시나리오: 타 트레이너 회원 GET/POST/chart-data/dashboard 4 라우트 → 403 "forbidden"; POST 403 시 pt_sessions·session_sets INSERT 0건 회귀; 본인 회원 4 라우트 → 200 regression; 관장 bypass 4 라우트 → 200 (tid 일치); 관장 + URL tid 불일치 → 404 (URL 위조 방지); 비로그인 → 303 /login; 존재하지 않는 mid → 404 (403과 구분); GET / 비관장 로그인 → 본인 첫 회원으로 303; GET / 관장 로그인 → 기존 동작 유지 303; GET / 회원 0건 트레이너 → 200 안내 페이지.
+9. `tests/test_my_audit_log.py` (iteration 6 신규) — N0 감사 로그 뷰어. 8 시나리오: ① 관장 `?trainer_id=X` export → export_audit 1 row (owner_export, actor=owner, target=X, rows 정확). ② 관장 쿼리 없이 export → 1 row (target=NULL). ③ 본인 `/my/export` → 1 row (my_export, actor=target=self). ④ `/my/audit-log` WHERE 3 OR 조건 회귀 방지 (타 트레이너 only row 미노출 — CTO 조건 4). ⑤ 미로그인 → 303 /login. ⑥ 관장 self-target row + target=NULL row 둘 다 관장 `/my/audit-log`에 노출 (CTO 조건 6). ⑦ `LIMIT 100` 검증 (`MY_AUDIT_LOG_LIMIT` 상수 import 기반). ⑧ `rows` 컬럼이 `_write_sessions_csv` 반환값(header 제외 data row 수)과 일치 (CTO 조건 5).
 
 ## 프레임워크
 - `pytest`, `pytest-asyncio` (async 라우트 테스트용)
