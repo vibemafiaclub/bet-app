@@ -129,12 +129,43 @@ uv run --with pyyaml python .claude/skills/persuasion-review/scripts/run_simulat
   --persona-id <persona_id> \
   --value-prop persuasion-data/runs/<run_id>/value_proposition.md \
   --run-id <run_id> \
-  --max-parallel 4
+  --max-parallel 4 \
+  [--enable-ux-probe]                        # 5a0 활성화 (프로젝트 어댑터 있을 때만)
 ```
+
+`--enable-ux-probe`는 5a(문서 기반 판단) 앞에 5a0(실제 서비스 조작 probe)을 끼워 넣는다. 상세는 §4.5.
 
 `run_id` 형식: `<persona_id>_<YYYYMMDD_HHMMSS>`.
 
 스크립트는 `runs/<run_id>/` 하위에 모든 세션 출력 + `report.md`를 생성한다.
+
+### 4.5 (opt-in) 5a0 — keyman UX probe
+
+`--enable-ux-probe`로 활성화. keyman이 **value_proposition.md만 읽은 상태**에서 실제 서비스를 직접 조작하며 UX를 점검하는 단계. 5a(문서 기반 판단)의 입력에 probe 리포트 + 스크린샷을 추가해, "프로덕트 성숙도"라는 신뢰도 비용 축을 평가 기준에 포함시킨다.
+
+- 프롬프트: `scripts/prompts/keyman_ux_probe.md`
+- 브라우저 조작: `scripts/ux_probe.py` (Playwright CLI 래퍼, 프로젝트 독립)
+- **프로젝트 어댑터**: `persuasion-data/ux_probe_adapter.py`. skill은 프로젝트별 서비스 기동 방법을 모르므로 이 파일이 필요하다. 계약:
+
+```python
+def start(run_dir: pathlib.Path) -> dict:
+    # 서비스 기동 + (필요 시) seed. 반환 dict 필수 키:
+    #   base_url: str          실행 중인 서비스 루트 URL
+    #   python_bin: str        playwright 설치된 python 경로
+    #   credentials: dict      페르소나가 로그인 시 쓸 자격 (자유 형식)
+    #   context: dict          템플릿 컨텍스트 (자유 형식, ex: entity ids)
+    #   tasks_markdown: str    프로젝트별 Task 목록 (markdown, T1, T2, …)
+    # side effect: teardown 정보(pidfile 등)를 run_dir 하위에 직접 저장.
+    ...
+
+def stop(run_dir: pathlib.Path) -> None:
+    # start가 띄운 서비스 종료. 실패해도 raise 하지 말 것.
+    ...
+```
+
+- 어댑터가 없으면 5a0은 조용히 스킵되고 run은 5a부터 진행. 5a 프롬프트의 "프로덕트 성숙도 루브릭"은 "증거 부재"를 신뢰도 감점 사유로 처리.
+- 출력: `runs/<run_id>/00_keyman_ux_probe.md` + `runs/<run_id>/ui_screenshots/*.png`
+- 비용: Task 1개 ≈ Bash 호출 4~8회. Task 4개 시 세션당 추가 \$0.5~1.5 예상.
 
 ### C-6. 결과 브리핑
 

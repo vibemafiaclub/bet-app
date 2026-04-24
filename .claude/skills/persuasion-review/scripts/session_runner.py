@@ -69,14 +69,21 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
     return meta, parts[2].lstrip("\n")
 
 
+DEFAULT_ALLOWED_TOOLS = ("Read", "Write")
+
+
 def run_session(
     *,
     system_prompt_path: Path,
     task_prompt: str,
     output_path: Path,
     timeout_sec: int = 600,
+    allowed_tools: tuple[str, ...] = DEFAULT_ALLOWED_TOOLS,
 ) -> SessionResult:
-    """claude headless 세션을 1회 실행하고 결과 파일을 파싱해 반환."""
+    """claude headless 세션을 1회 실행하고 결과 파일을 파싱해 반환.
+
+    allowed_tools: 기본 (Read, Write). UX probe 등 Bash가 필요한 세션은 호출측에서 확장.
+    """
     system_prompt = system_prompt_path.read_text(encoding="utf-8")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -87,7 +94,7 @@ def run_session(
         # subprocess에서는 상호작용 승인이 불가하므로 권한 체크를 완전히 스킵.
         # --permission-mode bypassPermissions만으로는 Write가 차단되는 사례 확인됨(2.1.117).
         "--dangerously-skip-permissions",
-        "--allowed-tools", "Read", "Write",
+        "--allowed-tools", *allowed_tools,
     ]
 
     try:

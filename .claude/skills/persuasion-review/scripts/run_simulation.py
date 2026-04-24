@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import datetime as dt
+import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -25,12 +27,16 @@ from session_runner import SessionResult, parse_frontmatter, run_session
 
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
+SKILL_SCRIPTS_DIR = Path(__file__).resolve().parent
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+UX_PROBE_SCRIPT = SKILL_SCRIPTS_DIR / "ux_probe.py"
 # personas/, runs/, feature-ideas.md는 .claude/ 바깥(레포 루트 persuasion-data/)에 둠.
 # Claude Code가 .claude/ 경로를 sensitive로 분류해 Write를 차단하기 때문.
 # __file__ = <repo>/.claude/skills/persuasion-review/scripts/run_simulation.py
 # → parents[4] = <repo>
-DATA_DIR = Path(__file__).resolve().parents[4] / "persuasion-data"
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DATA_DIR = REPO_ROOT / "persuasion-data"
+UX_PROBE_ADAPTER_PATH = DATA_DIR / "ux_probe_adapter.py"
 
 
 # ============================================================
@@ -80,6 +86,121 @@ async def run_in_executor(sem: asyncio.Semaphore, fn, *args, **kwargs) -> Sessio
 
 
 # ============================================================
+# Stage 5a0 — keyman UX probe (opt-in, 프로젝트별 어댑터 위임)
+# ============================================================
+
+# 프로젝트-독립 skill이 실제 서비스를 기동할 방법을 모르므로, probe는
+# 프로젝트 측에 `persuasion-data/ux_probe_adapter.py`를 두는 컨벤션으로
+# 위임한다. 어댑터가 없으면 probe는 스킵되고 run은 5a부터 진행된다.
+#
+# 어댑터 인터페이스 (contract):
+#
+#   def start(run_dir: pathlib.Path) -> dict:
+#       """서비스 기동 + (필요 시) 데이터 seed. 반환 dict 필수 키:
+#           - base_url: str           실행 중인 서비스 루트 URL
+#           - python_bin: str         ux_probe.py를 실행할 python 경로 (playwright 설치 필수)
+#           - credentials: dict       페르소나가 로그인 시 쓸 자격 (자유 형식)
+#           - context: dict           템플릿 컨텍스트 (자유 형식, 예: entity ids)
+#           - tasks_markdown: str     페르소나에게 줄 프로젝트별 Task 목록 (markdown)
+#         side effect: 서버 pid 등 teardown에 필요한 상태를 run_dir 하위에 직접 보존."""
+#
+#   def stop(run_dir: pathlib.Path) -> None:
+#       """start가 띄운 서비스를 종료한다. 실패해도 예외를 던지지 않는다."""
+
+
+def _load_ux_probe_adapter() -> object | None:
+    if not UX_PROBE_ADAPTER_PATH.exists():
+        return None
+    spec = importlib.util.spec_from_file_location("ux_probe_adapter", UX_PROBE_ADAPTER_PATH)
+    if spec is None or spec.loader is None:
+        return None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def stage_5a0_ux_probe(
+    persona_id: str,
+    persona_path: Path,
+    value_prop_path: Path,
+    run_dir: Path,
+    run_id: str,
+) -> SessionResult | None:
+    """keyman UX probe. 어댑터 부재·기동 실패 시 None(스킵) 반환."""
+    adapter = _load_ux_probe_adapter()
+    if adapter is None:
+        print(f"[5a0] no adapter at {UX_PROBE_ADAPTER_PATH} — skipping probe", flush=True)
+        return None
+    try:
+        env = adapter.start(run_dir)
+    except Exception as e:
+        print(f"[5a0] adapter.start failed: {type(e).__name__}: {e}", file=sys.stderr)
+        return None
+
+    required = {"base_url", "python_bin", "credentials", "context", "tasks_markdown"}
+    missing = required - set(env.keys())
+    if missing:
+        print(f"[5a0] adapter env missing keys: {sorted(missing)}", file=sys.stderr)
+        try:
+            adapter.stop(run_dir)
+        except Exception:
+            pass
+        return None
+
+    output_path = run_dir / "00_keyman_ux_probe.md"
+    screenshots_dir = run_dir / "ui_screenshots"
+    state_file = run_dir / "probe" / "ux_probe_state.json"
+    if state_file.exists():
+        state_file.unlink()
+
+    credentials_json = json.dumps(env["credentials"], ensure_ascii=False)
+    context_json = json.dumps(env["context"], ensure_ascii=False)
+
+    task = f"""{build_inputs_block([persona_path, value_prop_path])}
+
+당신은 위 페르소나의 keyman(actor_id: km)이다. 세일즈맨이 가치제안을 건네며 "직접 써보시라"고 했다. 지금 실제 서비스에 접속해 아래 Task들을 순서대로 수행하고, Task별 기대 vs 실제 + 마찰 점수, 마지막에 종합 코멘트를 기록하라.
+
+## probe 환경
+
+- base_url: {env['base_url']}
+- credentials (JSON): {credentials_json}
+- context (JSON, 프로젝트별 변수): {context_json}
+- python_bin: {env['python_bin']}
+- ux_probe_script: {UX_PROBE_SCRIPT}
+- state_file: {state_file}
+- screenshots_dir: {screenshots_dir}
+
+## Bash 호출 템플릿
+
+```
+{env['python_bin']} {UX_PROBE_SCRIPT} --state-file {state_file} --screenshots-dir {screenshots_dir} <subcommand> [args...]
+```
+
+## 수행할 Task (프로젝트 정의)
+
+{env['tasks_markdown']}
+
+run_id: {run_id}
+출력 파일 경로 (Write 도구로 저장): {output_path}
+
+※ Task당 Bash 호출 8회 상한, 연속 selector 2회 실패 시 snapshot 재탐색, 외부 URL 호출 금지.
+"""
+    try:
+        return run_session(
+            system_prompt_path=PROMPTS_DIR / "keyman_ux_probe.md",
+            task_prompt=task,
+            output_path=output_path,
+            timeout_sec=1200,
+            allowed_tools=("Read", "Write", "Bash"),
+        )
+    finally:
+        try:
+            adapter.stop(run_dir)
+        except Exception as e:
+            print(f"[5a0] adapter.stop error (ignored): {e}", file=sys.stderr)
+
+
+# ============================================================
 # Stage 5a — keyman 초기 판단
 # ============================================================
 
@@ -89,12 +210,22 @@ def stage_5a(
     value_prop_path: Path,
     run_dir: Path,
     run_id: str,
+    ux_probe_path: Path | None = None,
 ) -> SessionResult:
     output_path = run_dir / "01_keyman_initial.md"
-    task = f"""{build_inputs_block([persona_path, value_prop_path])}
+    inputs = [persona_path, value_prop_path]
+    probe_clause = ""
+    if ux_probe_path is not None and ux_probe_path.exists():
+        inputs.append(ux_probe_path)
+        probe_clause = (
+            "\n추가 입력: 당신이 방금 수행한 UX probe 리포트(위 파일)와 "
+            f"동일 디렉토리의 `ui_screenshots/` PNG들을 함께 검토하라. "
+            "system prompt의 '프로덕트 성숙도' 비용 축에 이 증거를 반드시 반영할 것.\n"
+        )
+    task = f"""{build_inputs_block(inputs)}
 
 당신은 위 페르소나의 keyman(actor_id: km)이다. 세일즈맨이 전달한 가치제안 문서를 비판적으로 검토하고, system prompt의 판정 규칙대로 판단을 내려라.
-
+{probe_clause}
 run_id: {run_id}
 출력 파일 경로 (Write 도구로 저장): {output_path}
 """
@@ -410,6 +541,8 @@ def main() -> int:
     parser.add_argument("--value-prop", required=True, help="value_proposition.md 경로")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--max-parallel", type=int, default=4)
+    parser.add_argument("--enable-ux-probe", action="store_true",
+                        help="5a0 UX probe 활성화. persuasion-data/ux_probe_adapter.py 필요.")
     args = parser.parse_args()
 
     persona_meta, persona_path = load_persona(args.persona_id)
@@ -433,9 +566,24 @@ def main() -> int:
 
     failure_reason: str | None = None
 
+    # ---- 5a0 (opt-in)
+    probe_result_path: Path | None = None
+    if args.enable_ux_probe:
+        print(f"[5a0] keyman UX probe …", flush=True)
+        r5a0 = stage_5a0_ux_probe(
+            args.persona_id, persona_path, value_prop_path, run_dir, args.run_id,
+        )
+        if r5a0 is None:
+            print(f"     → skipped (adapter 부재 또는 기동 실패)", flush=True)
+        else:
+            print(f"     → {summarize_result(r5a0)}", flush=True)
+            if r5a0.ok:
+                probe_result_path = r5a0.output_path
+
     # ---- 5a
     print(f"[5a] keyman initial 판단 …", flush=True)
-    r5a = stage_5a(args.persona_id, persona_path, value_prop_path, run_dir, args.run_id)
+    r5a = stage_5a(args.persona_id, persona_path, value_prop_path, run_dir, args.run_id,
+                   ux_probe_path=probe_result_path)
     print(f"     → {summarize_result(r5a)}", flush=True)
 
     if not r5a.ok:
