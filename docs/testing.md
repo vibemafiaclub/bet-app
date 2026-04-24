@@ -15,6 +15,7 @@
 5. `tests/test_e2e_dashboard.py` — Playwright headless. uvicorn 서브프로세스 fixture는 teardown에서 `process.terminate() + process.wait(timeout=5)` 필수. 임시 DB 파일 cleanup 필수.
 6. `tests/test_export.py` (iteration 2 신규) — `/admin/export/sessions.csv` 권한 분기(owner only), `trainer_id` 쿼리 필터, 60초 rate limit, stdout 감사 로그 포맷, NULL `input_trainer_id` row의 빈 이름 렌더, UTF-8 BOM 본문 접두.
 7. `tests/test_my_export.py` (iteration 3 신규) — `/my/export/sessions.csv` 권한 분기(is_authenticated만 필요, is_owner bypass 없음), 본인 `input_trainer_id` 필터, 관장 로그인 시에도 본인 row만 반환, 60초 rate limit (관장 export와 dict 물리 분리), stdout 감사 로그 포맷 `[my-export] trainer_id=X rows=N`, UTF-8 BOM 본문 접두, `filename="my_sessions_YYYYMMDD.csv"` 헤더, **컬럼 동등성 회귀 테스트**(관장 `/admin/export?trainer_id=X` body와 X 로그인 `/my/export` body가 bit-exact 일치).
+8. `tests/test_member_access.py` (iteration 5 신규) — R5 partial isolation 가드. 12 시나리오: 타 트레이너 회원 GET/POST/chart-data/dashboard 4 라우트 → 403 "forbidden"; POST 403 시 pt_sessions·session_sets INSERT 0건 회귀; 본인 회원 4 라우트 → 200 regression; 관장 bypass 4 라우트 → 200 (tid 일치); 관장 + URL tid 불일치 → 404 (URL 위조 방지); 비로그인 → 303 /login; 존재하지 않는 mid → 404 (403과 구분); GET / 비관장 로그인 → 본인 첫 회원으로 303; GET / 관장 로그인 → 기존 동작 유지 303; GET / 회원 0건 트레이너 → 200 안내 페이지.
 
 ## 프레임워크
 - `pytest`, `pytest-asyncio` (async 라우트 테스트용)
