@@ -5,7 +5,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from app.aggregates import max_weight_per_session, total_volume_per_session
@@ -15,6 +15,7 @@ from app.auth import (
     is_owner,
     login_required_redirect,
     owner_required_redirect,
+    require_member_access,
     verify_credentials,
 )
 from app.db import get_connection
@@ -107,51 +108,68 @@ def register_routes(app: FastAPI) -> None:
     async def index(request: Request):
         if not is_authenticated(request):
             return login_required_redirect()
+        if is_owner(request):
+            with get_connection() as conn:
+                trainer_row = conn.execute(
+                    "SELECT id FROM trainers ORDER BY id LIMIT 1"
+                ).fetchone()
+                if not trainer_row:
+                    return HTMLResponse("<p>seed를 실행하세요</p>")
+                trainer_id = trainer_row["id"]
+                member_row = conn.execute(
+                    "SELECT id FROM members WHERE trainer_id=? ORDER BY id LIMIT 1",
+                    (trainer_id,),
+                ).fetchone()
+                if not member_row:
+                    return HTMLResponse("<p>seed를 실행하세요</p>")
+                member_id = member_row["id"]
+            return RedirectResponse(
+                url=f"/trainers/{trainer_id}/members/{member_id}/log", status_code=303
+            )
+        user = current_user(request)
+        self_tid = user["trainer_id"]
         with get_connection() as conn:
-            trainer_row = conn.execute(
-                "SELECT id FROM trainers ORDER BY id LIMIT 1"
-            ).fetchone()
-            if not trainer_row:
-                return HTMLResponse("<p>seed를 실행하세요</p>")
-            trainer_id = trainer_row["id"]
             member_row = conn.execute(
                 "SELECT id FROM members WHERE trainer_id=? ORDER BY id LIMIT 1",
-                (trainer_id,),
+                (self_tid,),
             ).fetchone()
-            if not member_row:
-                return HTMLResponse("<p>seed를 실행하세요</p>")
-            member_id = member_row["id"]
-        return RedirectResponse(
-            url=f"/trainers/{trainer_id}/members/{member_id}/log", status_code=303
-        )
+        if member_row:
+            mid = member_row["id"]
+            return RedirectResponse(url=f"/trainers/{self_tid}/members/{mid}/log", status_code=303)
+        return HTMLResponse("<p>담당 회원이 아직 없습니다. 관장에게 요청하세요.</p>", status_code=200)
 
     @app.get("/trainers/{tid}/members/{mid}/log")
     async def get_log(request: Request, tid: int, mid: int):
-        if not is_authenticated(request):
-            return login_required_redirect()
         with get_connection() as conn:
-            member = conn.execute(
-                "SELECT id, name FROM members WHERE id=? AND trainer_id=?",
-                (mid, tid),
-            ).fetchone()
-        if not member:
-            return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
-        return templates.TemplateResponse(
-            request,
-            "log.html",
-            {
-                "tid": tid,
-                "mid": mid,
-                "member_name": member["name"],
-                "exercises": EXERCISES,
-                "today": date.today().isoformat(),
-            },
-        )
+            ok, status, member = require_member_access(request, conn, tid, mid)
+            if not ok:
+                if status is None:
+                    return login_required_redirect()
+                if status == 403:
+                    return PlainTextResponse("forbidden", status_code=403)
+                return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
+            return templates.TemplateResponse(
+                request,
+                "log.html",
+                {
+                    "tid": tid,
+                    "mid": mid,
+                    "member_name": member["name"],
+                    "exercises": EXERCISES,
+                    "today": date.today().isoformat(),
+                },
+            )
 
     @app.post("/trainers/{tid}/members/{mid}/log")
     async def post_log(request: Request, tid: int, mid: int):
-        if not is_authenticated(request):
-            return login_required_redirect()
+        with get_connection() as conn:
+            ok, status, member = require_member_access(request, conn, tid, mid)
+            if not ok:
+                if status is None:
+                    return login_required_redirect()
+                if status == 403:
+                    return PlainTextResponse("forbidden", status_code=403)
+                return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
         form = await request.form()
         session_date = str(form.get("session_date", ""))
         exercises_raw = form.getlist("exercise")
@@ -212,15 +230,14 @@ def register_routes(app: FastAPI) -> None:
 
     @app.get("/trainers/{tid}/members/{mid}/chart-data.json")
     async def get_chart_data(request: Request, tid: int, mid: int):
-        if not is_authenticated(request):
-            return login_required_redirect()
         with get_connection() as conn:
-            member = conn.execute(
-                "SELECT id, name FROM members WHERE id=? AND trainer_id=?",
-                (mid, tid),
-            ).fetchone()
-            if not member:
-                return JSONResponse({"detail": "not found"}, status_code=404)
+            ok, status, member = require_member_access(request, conn, tid, mid)
+            if not ok:
+                if status is None:
+                    return login_required_redirect()
+                if status == 403:
+                    return PlainTextResponse("forbidden", status_code=403)
+                return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
             max_weight_rows = max_weight_per_session(conn, mid)
             volume_rows = total_volume_per_session(conn, mid)
 
@@ -251,20 +268,19 @@ def register_routes(app: FastAPI) -> None:
 
     @app.get("/trainers/{tid}/members/{mid}/dashboard")
     async def get_dashboard(request: Request, tid: int, mid: int):
-        if not is_authenticated(request):
-            return login_required_redirect()
         with get_connection() as conn:
-            member = conn.execute(
-                "SELECT id, name FROM members WHERE id=? AND trainer_id=?",
-                (mid, tid),
-            ).fetchone()
-        if not member:
-            return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
-        return templates.TemplateResponse(
-            request,
-            "dashboard.html",
-            {"tid": tid, "mid": mid, "member_name": member["name"]},
-        )
+            ok, status, member = require_member_access(request, conn, tid, mid)
+            if not ok:
+                if status is None:
+                    return login_required_redirect()
+                if status == 403:
+                    return PlainTextResponse("forbidden", status_code=403)
+                return HTMLResponse("회원을 찾을 수 없습니다.", status_code=404)
+            return templates.TemplateResponse(
+                request,
+                "dashboard.html",
+                {"tid": tid, "mid": mid, "member_name": member["name"]},
+            )
 
     @app.get("/admin/export/sessions.csv")
     async def get_export_sessions(request: Request, trainer_id: int | None = None):

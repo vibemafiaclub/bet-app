@@ -1,6 +1,7 @@
 import hashlib
 import os
 import secrets
+import sqlite3
 from datetime import datetime
 
 from app.db import get_connection
@@ -115,3 +116,35 @@ def ensure_owner_seed() -> None:
                     " — 관장 교체 절차 필요 (docs/user-intervention.md 참조)",
                     flush=True,
                 )
+
+
+def require_member_access(
+    request: Request,
+    conn: sqlite3.Connection,
+    tid: int,
+    mid: int,
+) -> tuple[bool, int | None, sqlite3.Row | None]:
+    """회원 접근 권한 및 URL 정합성 검사.
+
+    반환값 (ok, status, member_row):
+    - (False, None, None): 비인증. 호출측은 login_required_redirect() 반환.
+    - (False, 404, None): mid 부재 or URL tid 불일치 (URL 위조 방지, 관장 포함).
+    - (False, 403, None): mid 존재 + tid 일치 + 비관장 + 타인 소유.
+    - (True, None, row): 통과. 관장 bypass 또는 본인 소유.
+
+    row는 members 테이블의 id, trainer_id, name 3컬럼 sqlite3.Row.
+    """
+    if not is_authenticated(request):
+        return (False, None, None)
+    row = conn.execute(
+        "SELECT id, trainer_id, name FROM members WHERE id=?", (mid,)
+    ).fetchone()
+    if row is None:
+        return (False, 404, None)
+    if row["trainer_id"] != tid:
+        return (False, 404, None)
+    if is_owner(request):
+        return (True, None, row)
+    if row["trainer_id"] == current_user(request)["trainer_id"]:
+        return (True, None, row)
+    return (False, 403, None)
