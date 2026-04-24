@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 from datetime import date, timedelta
@@ -360,7 +361,8 @@ def main():
                         )
                         set_index += 1
 
-    print(f"TRAINER_ID={trainer_id} MEMBER_IDS={','.join(str(m) for m in member_ids)}")
+    # probe_harness.load_seed_result() 계약: 마지막 비공백 줄은 단일 JSON 오브젝트.
+    print(json.dumps({"trainer_id": trainer_id, "member_ids": member_ids}))
 
 
 if __name__ == "__main__":

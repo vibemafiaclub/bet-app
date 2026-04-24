@@ -106,11 +106,19 @@ async def run_in_executor(sem: asyncio.Semaphore, fn, *args, **kwargs) -> Sessio
 #
 #   def stop(run_dir: pathlib.Path) -> None:
 #       """start가 띄운 서비스를 종료한다. 실패해도 예외를 던지지 않는다."""
+#
+# 어댑터는 공용 plumbing(포트 잡기/ready-poll/프로세스 정리/seed JSON 파싱)을
+# `from probe_harness import ...` 로 재사용한다. probe_harness.py 는 이 skill
+# scripts 디렉토리에 있고, _load_ux_probe_adapter()가 sys.path 에 주입한다.
 
 
 def _load_ux_probe_adapter() -> object | None:
     if not UX_PROBE_ADAPTER_PATH.exists():
         return None
+    # probe_harness.py 를 어댑터에서 `from probe_harness import ...` 로 쓰도록
+    # skill scripts 디렉토리를 sys.path 에 주입한다.
+    if str(SKILL_SCRIPTS_DIR) not in sys.path:
+        sys.path.insert(0, str(SKILL_SCRIPTS_DIR))
     spec = importlib.util.spec_from_file_location("ux_probe_adapter", UX_PROBE_ADAPTER_PATH)
     if spec is None or spec.loader is None:
         return None
