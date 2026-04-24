@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>감사 로그</h1>
+  <p>본인 관련 export 이력 최신 {{ rows|length }}건 (상한 100).</p>
+  <table>
+    <thead>
+      <tr>
+        <th>일시</th>
+        <th>행위</th>
+        <th>호출자</th>
+        <th>대상</th>
+        <th>rows</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr data-action="{{ row.action }}">
+        <td>{{ row.created_at }}</td>
+        <td>{{ row.action }}</td>
+        <td>{{ row.actor_name }}</td>
+        <td>
+          {% if row.action == 'owner_export' and row.target_trainer_id is none %}
+            전체 대상(본인 포함)
+          {% else %}
+            {{ row.target_name }}
+          {% endif %}
+        </td>
+        <td>{{ row.rows }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

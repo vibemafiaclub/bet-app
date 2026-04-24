@@ -34,6 +34,8 @@ _SESSIONS_CSV_COLUMNS = (
     "input_trainer_name",
 )
 
+MY_AUDIT_LOG_LIMIT = 100
+
 
 def _write_sessions_csv(conn, trainer_id_filter, buffer) -> int:
     """세션 row들을 CSV 포맷으로 buffer에 쓴다 (BOM 없음).
@@ -327,6 +329,35 @@ def register_routes(app: FastAPI) -> None:
             content=csv_content.encode("utf-8"),
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @app.get("/my/audit-log")
+    async def get_my_audit_log(request: Request):
+        if not is_authenticated(request):
+            return login_required_redirect()
+
+        self_tid = current_user(request)["trainer_id"]
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT ea.id, ea.created_at, ea.action, ea.target_trainer_id, ea.rows,
+                       actor.name AS actor_name, target.name AS target_name
+                FROM export_audit ea
+                JOIN trainers actor ON ea.actor_trainer_id = actor.id
+                LEFT JOIN trainers target ON ea.target_trainer_id = target.id
+                WHERE ea.target_trainer_id = ?
+                   OR ea.actor_trainer_id = ?
+                   OR (ea.action = 'owner_export' AND ea.target_trainer_id IS NULL)
+                ORDER BY ea.id DESC
+                LIMIT ?
+                """,
+                (self_tid, self_tid, MY_AUDIT_LOG_LIMIT),
+            ).fetchall()
+
+        return templates.TemplateResponse(
+            request,
+            "my_audit_log.html",
+            {"rows": rows},
         )
 
     @app.get("/my/export/sessions.csv")
