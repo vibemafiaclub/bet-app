@@ -1,0 +1,12 @@
+{
+  "project": "bet",
+  "task": "my-audit-log",
+  "prompt": "iteration 6 requirement: iterations/6-20260424_123444/requirement.md — N0 '트레이너 본인 감사 로그 뷰어'. export_audit 테이블 신규 + 관장/본인 export 성공 시 1 row INSERT + GET /my/audit-log 신규 라우트(is_authenticated만, is_owner 체크 없음). WHERE 3 OR 조건: target=self OR actor=self OR (owner_export AND target IS NULL). LIMIT 100, 페이지네이션/필터/CSV export 금지. stdout [export]/[my-export] 로그 이중 기록 유지. docs/spec.md '다음 스프린트 예약 티켓'에서 N0 라인 삭제 + 라우트 목록/CSV Export/데이터 모델/감사 로그 뷰어 섹션 업데이트. docs/testing.md 9번째 테스트 파일 추가 + '6 파일' → '9 파일' 수정. docs/user-intervention.md 변경 없음. 테스트 8 시나리오 (mock 금지, tmp_path SQLite). 무인 세션 자동 실행.",
+  "totalPhases": 3,
+  "created_at": "2026-04-24T13:17:46+0900",
+  "phases": [
+    { "phase": 0, "name": "docs", "status": "pending" },
+    { "phase": 1, "name": "schema-insert", "status": "pending" },
+    { "phase": 2, "name": "view-template-tests", "status": "pending" }
+  ]
+}
