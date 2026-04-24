@@ -99,5 +99,14 @@ CREATE TABLE IF NOT EXISTS session_sets (
     reps INTEGER NOT NULL CHECK(reps > 0),
     set_index INTEGER NOT NULL
 );
+-- iter 6: export_audit
+CREATE TABLE IF NOT EXISTS export_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    action TEXT NOT NULL CHECK(action IN ('owner_export', 'my_export')),
+    actor_trainer_id INTEGER NOT NULL REFERENCES trainers(id),
+    target_trainer_id INTEGER REFERENCES trainers(id),
+    rows INTEGER NOT NULL
+);
 """)
         _migrate_iteration2(conn)

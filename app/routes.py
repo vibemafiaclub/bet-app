@@ -303,6 +303,11 @@ def register_routes(app: FastAPI) -> None:
         buf = io.StringIO()
         with get_connection() as conn:
             rows_count = _write_sessions_csv(conn, trainer_id, buf)
+            conn.execute(
+                "INSERT INTO export_audit (created_at, action, actor_trainer_id, target_trainer_id, rows)"
+                " VALUES (?, 'owner_export', ?, ?, ?)",
+                (datetime.utcnow().isoformat(), owner_id, trainer_id, rows_count),
+            )
 
         csv_content = "﻿" + buf.getvalue()
         today_str = date.today().strftime("%Y%m%d")
@@ -343,6 +348,11 @@ def register_routes(app: FastAPI) -> None:
         buf = io.StringIO()
         with get_connection() as conn:
             rows_count = _write_sessions_csv(conn, trainer_id, buf)
+            conn.execute(
+                "INSERT INTO export_audit (created_at, action, actor_trainer_id, target_trainer_id, rows)"
+                " VALUES (?, 'my_export', ?, ?, ?)",
+                (datetime.utcnow().isoformat(), trainer_id, trainer_id, rows_count),
+            )
 
         csv_content = "﻿" + buf.getvalue()
         today_str = date.today().strftime("%Y%m%d")
