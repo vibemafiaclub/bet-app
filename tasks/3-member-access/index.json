@@ -1,0 +1,12 @@
+{
+  "project": "bet",
+  "task": "member-access",
+  "prompt": "iteration 5 requirement: iterations/5-20260424_104337/requirement.md — R5 partial implementation. 트레이너간 회원 접근 서버사이드 격리: require_member_access(request, conn, tid, mid) -> (ok, status, member_row) 헬퍼를 app/auth.py에 추가. 4 라우트(GET/POST /trainers/{tid}/members/{mid}/log, GET .../chart-data.json, GET .../dashboard)에 가드 적용 — 미소유+비관장 → 403 forbidden 평문, mid 부재 → 404, URL tid 불일치 → 관장 포함 404, 관장(is_owner) bypass는 tid 일치 전제로만. GET / redirect 변경 — 로그인 트레이너 본인 첫 회원으로. 비관장+회원 0건 → 200 안내 페이지. docs/spec.md 99~103행 + 113행 + 다음 스프린트 예약 티켓 섹션 갱신. 테스트 12 시나리오(test_member_access.py, mock 금지 tmp_path SQLite). 외부 의존 0. DB 마이그레이션 불요. 무인 세션 자동 실행.",
+  "totalPhases": 3,
+  "created_at": "2026-04-24T10:50:00+0900",
+  "phases": [
+    { "phase": 0, "name": "docs", "status": "pending" },
+    { "phase": 1, "name": "guard-impl", "status": "pending" },
+    { "phase": 2, "name": "tests", "status": "pending" }
+  ]
+}
